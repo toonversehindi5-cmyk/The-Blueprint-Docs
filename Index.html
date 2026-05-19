@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>The Blueprint Docs - AI Chat</title>
+    
+    <!-- CDNs for Tailwind and Marked -->
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    
+    <!-- Tailwind Config for Gemini-like Dark Mode & Typography -->
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gemini: {
+                            bgLight: '#ffffff',
+                            bgDark: '#131314',
+                            sidebarLight: '#f0f4f9',
+                            sidebarDark: '#1e1f20',
+                            textLight: '#1f1f1f',
+                            textDark: '#e3e3e3',
+                            borderLight: '#e3e3e3',
+                            borderDark: '#444746',
+                            accent: '#a8c7fa',
+                            userBubbleLight: '#f0f4f9',
+                            userBubbleDark: '#333537'
+                        }
+                    },
+                    typography: (theme) => ({
+                        DEFAULT: {
+                            css: {
+                                maxWidth: 'none',
+                                color: 'inherit',
+                                a: { color: theme('colors.blue.500'), '&:hover': { color: theme('colors.blue.400') } },
+                                pre: { backgroundColor: theme('colors.gray.800'), color: theme('colors.gray.100') },
+                                code: { color: theme('colors.pink.500'), backgroundColor: 'transparent' },
+                                'code::before': { content: '""' },
+                                'code::after': { content: '""' },
+                            }
+                        }
+                    })
+                }
+            }
+        };
+    </script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-thumb { background: #555; }
+        ::-webkit-scrollbar-thumb:hover { background: #a8a8a8; }
+        .dark ::-webkit-scrollbar-thumb:hover { background: #777; }
+
+        /* Prevent overscroll bounce on mobile to keep input stable */
+        body { overscroll-behavior-y: none; }
+        
+        /* Markdown overrides for better integration */
+        .prose pre { padding: 1rem; border-radius: 0.5rem; overflow-x: auto; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .prose p { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+        .prose > :first-child { margin-top: 0; }
+        .prose > :last-child { margin-bottom: 0; }
+
+        /* Loader Animation */
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .loader-spinner { border: 4px solid rgba(0,0,0,0.1); width: 40px; height: 40px; border-radius: 50%; border-left-color: #3b82f6; animation: spin 1s linear infinite; }
+        .dark .loader-spinner { border-color: rgba(255,255,255,0.1); border-left-color: #60a5fa; }
+        
+        /* Blinking cursor for AI typing */
+        .cursor-blink::after { content: '▋'; animation: blink 1s step-start infinite; color: #3b82f6; margin-left: 2px; }
+        @keyframes blink { 50% { opacity: 0; } }
+
+        /* Hide textarea scrollbar but allow resize */
+        textarea::-webkit-scrollbar { display: none; }
+        textarea { -ms-overflow-style: none; scrollbar-width: none; }
+    </style>
+</head>
+<body class="m-0 p-0 w-full min-h-[100dvh] bg-gemini-bgLight dark:bg-gemini-bgDark text-gemini-textLight dark:text-gemini-textDark transition-colors duration-200 overflow-hidden text-sm sm:text-base">
+
+    <!-- FALLBACK LOADER -->
+    <div id="loading" class="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-gemini-bgLight dark:bg-gemini-bgDark transition-opacity duration-300">
+        <div class="loader-spinner mb-4"></div>
+        <h2 class="text-lg font-semibold text-gray-700 dark:text-gray-300">Loading App...</h2>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app" class="hidden flex w-full h-[100dvh]">
+        
+        <!-- SIDEBAR OVERLAY (Mobile) -->
+        <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-40 hidden md:hidden transition-opacity" onclick="toggleSidebar()"></div>
+
+        <!-- SIDEBAR -->
+        <aside id="sidebar" class="fixed md:relative top-0 left-0 h-full w-72 bg-gemini-sidebarLight dark:bg-gemini-sidebarDark transform -translate-x-full md:translate-x-0 transition-transform duration-300 z-50 flex flex-col border-r border-gemini-borderLight dark:border-gemini-borderDark">
+            <div class="p-4 flex items-center justify-between">
+                <button onclick="createNewChat()" class="flex-1 flex items-center gap-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 px-4 py-3 rounded-full shadow-sm border border-gray-200 dark:border-gray-700 transition-colors">
+                    <svg class="w-5 h-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                    <span class="font-medium">New Chat</span>
+                </button>
+                <button class="md:hidden ml-2 p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300" onclick="toggleSidebar()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="px-4 pb-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Recent</div>
+            
+            <div id="chat-list" class="flex-1 overflow-y-auto px-2 space-y-1">
+                <!-- Chat items injected here via JS -->
+            </div>
+
+            <div class="p-4 border-t border-gemini-borderLight dark:border-gemini-borderDark mt-auto space-y-2">
+                <button onclick="toggleTheme()" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-left text-gray-700 dark:text-gray-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
+                    <span>Toggle Theme</span>
+                </button>
+                <button onclick="openSettings()" class="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-left text-gray-700 dark:text-gray-300">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    <span>Settings</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- MAIN CONTENT -->
+        <main class="flex-1 flex flex-col min-w-0 h-full relative">
+            
+            <!-- HEADER -->
+            <header class="h-14 sm:h-16 flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 bg-gemini-bgLight/90 dark:bg-gemini-bgDark/90 backdrop-blur z-20">
+                <div class="flex items-center gap-3">
+                    <button class="md:hidden p-2 -ml-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300" onclick="toggleSidebar()">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+                    </button>
+                    <h1 class="text-xl font-medium text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                        <span id="header-model-name" class="truncate max-w-[150px] sm:max-w-xs text-base text-gray-500 dark:text-gray-400">DeepSeek</span>
+                    </h1>
+                </div>
+            </header>
+
+            <!-- MESSAGES AREA -->
+            <div id="messages-container" class="flex-1 overflow-y-auto px-4 sm:px-6 w-full max-w-4xl mx-auto scroll-smooth">
+                
+                <!-- GREETING STATE -->
+                <div id="greeting-screen" class="h-full flex flex-col items-center justify-center text-center pb-20">
+                    <div class="w-16 h-16 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center mb-6 shadow-lg">
+                        <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                    </div>
+                    <h2 class="text-3xl sm:text-4xl font-semibold mb-2 bg-gradient-to-r from-blue-500 to-purple-500 bg-clip-text text-transparent">Hello, User</h2>
+                    <p class="text-lg text-gray-500 dark:text-gray-400">How can I help you today?</p>
+                </div>
+
+                <!-- MESSAGES LIST -->
+                <div id="chat-messages" class="flex flex-col space-y-6 pb-6 hidden">
+                    <!-- Messages injected here -->
+                </div>
+                
+                <!-- Spacer for scrolling above input -->
+                <div class="h-4"></div>
+            </div>
+
+            <!-- INPUT AREA -->
+            <div class="shrink-0 w-full max-w-4xl mx-auto px-4 pb-4 sm:pb-6 pt-2 bg-gradient-to-t from-gemini-bgLight via-gemini-bgLight dark:from-gemini-bgDark dark:via-gemini-bgDark">
+                <form id="chat-form" class="relative flex items-end bg-gemini-userBubbleLight dark:bg-gemini-userBubbleDark rounded-3xl p-2 shadow-sm border border-gray-200 dark:border-gray-700 focus-within:ring-1 focus-within:ring-gray-300 dark:focus-within:ring-gray-600 transition-all">
+                    <textarea 
+                        id="chat-input" 
+                        rows="1" 
+                        class="w-full max-h-48 bg-transparent text-gray-800 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 border-none focus:ring-0 resize-none py-3 px-4 outline-none block"
+                        placeholder="Message AI... (Shift+Enter for new line)"
+                        oninput="this.style.height = ''; this.style.height = this.scrollHeight + 'px'"
+                        onkeydown="handleKeydown(event)"
+                    ></textarea>
+                    
+                    <button type="button" id="stop-btn" onclick="stopGeneration()" class="hidden absolute right-3 bottom-3 p-2 bg-red-500 hover:bg-red-600 text-white rounded-full transition-colors flex items-center justify-center">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"></rect></svg>
+                    </button>
+
+                    <button type="submit" id="send-btn" class="absolute right-3 bottom-3 p-2 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-white rounded-full transition-colors flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
+                    </button>
+                </form>
+                <div class="text-center text-xs text-gray-400 mt-2">Powered by OpenRouter API. Responses may be inaccurate.</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="settings-modal" class="fixed inset-0 z-[100] bg-black/60 hidden flex items-center justify-center p-4 backdrop-blur-sm transition-opacity">
+        <div class="bg-white dark:bg-[#1e1f20] w-full max-w-md rounded-2xl shadow-2xl flex flex-col max-h-[90dvh] overflow-hidden">
+            <div class="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+                <h3 class="text-xl font-semibold text-gray-800 dark:text-gray-100">Settings</h3>
+                <button onclick="closeSettings()" class="text-gray-500 hover:text-gray-800 dark:hover:text-gray-200">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto flex-1 space-y-5">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">OpenRouter API Key <span class="text-red-500">*</span></label>
+                    <input type="password" id="setting-api-key" placeholder="sk-or-v1-..." class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <p class="text-xs text-gray-500 mt-1">Stored securely in your local browser only.</p>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Model ID</label>
+                    <input type="text" id="setting-model" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">System Prompt</label>
+                    <textarea id="setting-prompt" rows="4" class="w-full bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-2 text-gray-800 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"></textarea>
+                </div>
+            </div>
+
+            <div class="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3 bg-gray-50 dark:bg-[#1e1f20]">
+                <button onclick="closeSettings()" class="px-4 py-2 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg transition-colors">Cancel</button>
+                <button onclick="saveSettings()" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN JAVASCRIPT -->
+    <script>
+        // ==========================================
+        // STATE MANAGEMENT
+        // ==========================================
+        const DEFAULT_STATE = {
+            apiKey: '',
+            model: 'deepseek/deepseek-r1:free',
+            systemPrompt: 'You are a helpful, intelligent, and concise AI assistant.',
+            theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+            chats: [],
+            currentChatId: null
+        };
+
+        let state = { ...DEFAULT_STATE };
+        let activeAbortController = null;
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                loadState();
+                applyTheme();
+                
+                // Set default chat if none exists
+                if (state.chats.length === 0) {
+                    createNewChat();
+                } else if (!state.currentChatId) {
+                    state.currentChatId = state.chats[0].id;
+                }
+
+                renderSidebar();
+                renderCurrentChat();
+                updateModelDisplay();
+
+                // Setup marked.js options
+                if (typeof marked !== 'undefined') {
+                    marked.setOptions({
+                        breaks: true,
+                        gfm: true
+                    });
+                }
+
+                // Hide loader, show app
+                setTimeout(() => {
+                    document.getElementById('loading').classList.add('hidden');
+                    document.getElementById('app').classList.remove('hidden');
+                    
+                    // Prompt for API key if missing
+                    if (!state.apiKey) {
+                        openSettings();
+                    }
+                }, 500); // Slight delay for smooth transition
+            } catch (err) {
+                console.error("Initialization Error:", err);
+                document.getElementById('loading').innerHTML = `<div class="text-red-500 text-center p-4"><h3>Failed to load app.</h3><p>${err.message}</p></div>`;
+            }
+        });
+
+        // ==========================================
+        // STORAGE & UTILS
+        // ==========================================
+        function loadState() {
+            const saved = localStorage.getItem('gemini_clone_data');
+            if (saved) {
+                try {
+                    const parsed = JSON.parse(saved);
+                    state = { ...DEFAULT_STATE, ...parsed };
+                } catch(e) {
+                    console.error("Failed to parse local storage", e);
+                }
+            }
+        }
+
+        function saveState() {
+            localStorage.setItem('gemini_clone_data', JSON.stringify(state));
+        }
+
+        function generateId() {
+            return Math.random().toString(36).substring(2, 15);
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, tag => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+            }[tag] || tag));
+        }
+
+        // ==========================================
+        // THEME & UI TOGGLES
+        // ==========================================
+        function toggleTheme() {
+            state.theme = state.theme === 'light' ? 'dark' : 'light';
+            applyTheme();
+            saveState();
+        }
+
+        function applyTheme() {
+            if (state.theme === 'dark') {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        }
+
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            
+            if (sidebar.classList.contains('-translate-x-full')) {
+                sidebar.classList.remove('-translate-x-full');
+       
